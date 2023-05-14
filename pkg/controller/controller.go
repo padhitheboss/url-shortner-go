@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/padhitheboss/url-shortner-go/pkg/helper"
@@ -15,13 +14,13 @@ func GetURL(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Get Executed")
 	URLId := chi.URLParam(r, "Id")
 	// URLid := helper.GetShortURLID(url)
-	result, ok := model.M[URLId]
-	if !ok {
+	result, err := model.GetURL(URLId)
+	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(&model.Status{Error: "url not found"})
+		json.NewEncoder(w).Encode(&model.Status{Error: err.Error()})
 		return
 	}
-	url := helper.EnforceHTTP(result.URL)
+	url := helper.EnforceHTTP(result)
 	fmt.Println(url)
 	http.Redirect(w, r, url, http.StatusSeeOther)
 }
@@ -36,12 +35,21 @@ func GenShortURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Println(body.URL)
-	shortUrl := helper.GenShortURL()
+	var shortUrl string
+	if body.ShorternURL == "" {
+		shortUrl = helper.GenShortURL()
+		body.ShorternURL = shortUrl
+	}
 	var res model.Response
 	res.URL = body.URL
-	res.ShorternURL = shortUrl
+	res.ShorternURL = body.ShorternURL
 	res.UserId = "nil"
-	res.Expiry = 30 * time.Minute
-	model.M[shortUrl] = res
+	res.Expiry = 30
+	err = model.StoreURL(&body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(&model.Status{Error: err.Error()})
+		return
+	}
 	json.NewEncoder(w).Encode(&res)
 }
